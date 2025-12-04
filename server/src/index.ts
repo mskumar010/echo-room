@@ -3,6 +3,13 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import cookieParser from 'cookie-parser';
+import { connectDatabase } from './config/database';
+import { setupSocketHandlers, initializeSequences } from './socket/handlers';
+import authRoutes from './routes/auth';
+import roomsRoutes from './routes/rooms';
+import messagesRoutes from './routes/messages';
+import { errorHandler } from './middleware/errorHandler';
 
 // Load environment variables
 dotenv.config();
@@ -19,6 +26,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 // Socket.IO setup
 const io = new Server(httpServer, {
@@ -31,91 +39,37 @@ app.get('/health', (_req, res) => {
 	res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Socket.IO connection handling
-io.on('connection', (socket) => {
-	console.log(`Client connected: ${socket.id}`);
+// API routes
+app.use('/auth', authRoutes);
+app.use('/rooms', roomsRoutes);
+app.use('/rooms/:roomId/messages', messagesRoutes);
 
-	// Handle authentication
-	socket.on('auth:identify', (data) => {
-		// TODO: Verify JWT token
-		console.log('Auth attempt:', data);
-		socket.emit('auth:ok', { userId: 'temp-user-id' });
-	});
+// Error handling middleware (must be last)
+app.use(errorHandler);
 
-	// Handle room joining
-	socket.on('room:join', (data) => {
-		const { roomId } = data;
-		socket.join(roomId);
-		console.log(`Socket ${socket.id} joined room: ${roomId}`);
-		socket.emit('room:joined', { roomId });
-	});
+// Initialize database and start server
+async function startServer() {
+	try {
+		// Connect to database
+		await connectDatabase();
 
-	// Handle room leaving
-	socket.on('room:leave', (data) => {
-		const { roomId } = data;
-		socket.leave(roomId);
-		console.log(`Socket ${socket.id} left room: ${roomId}`);
-		socket.emit('room:left', { roomId });
-	});
+		// Initialize sequence numbers
+		await initializeSequences();
 
-	// Handle message sending
-	socket.on('message:send', (data) => {
-		const { roomId, text, tempId } = data;
-		console.log(`Message in room ${roomId}: ${text}`);
+		// Setup Socket.IO handlers
+		setupSocketHandlers(io);
 
-		// Broadcast to room
-		io.to(roomId).emit('message:new', {
-			message: {
-				id: tempId || `msg-${Date.now()}`,
-				roomId,
-				text,
-				sender: {
-					id: 'temp-user-id',
-					displayName: 'User',
-				},
-				createdAt: new Date().toISOString(),
-			},
-			seq: Date.now(),
+		// Start server
+		const PORT = process.env.PORT || 3000;
+		httpServer.listen(PORT, () => {
+			console.log(`🚀 Server running on port ${PORT}`);
+			console.log(`📡 Socket.IO ready`);
+			console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
 		});
+	} catch (error) {
+		console.error('Failed to start server:', error);
+		process.exit(1);
+	}
+}
 
-		// Acknowledge to sender
-		socket.emit('message:ack', {
-			tempId,
-			realId: `msg-${Date.now()}`,
-		});
-	});
-
-	// Handle typing indicators
-	socket.on('typing:start', (data) => {
-		const { roomId } = data;
-		socket.to(roomId).emit('typing:update', {
-			roomId,
-			userId: socket.id,
-			isTyping: true,
-		});
-	});
-
-	socket.on('typing:stop', (data) => {
-		const { roomId } = data;
-		socket.to(roomId).emit('typing:update', {
-			roomId,
-			userId: socket.id,
-			isTyping: false,
-		});
-	});
-
-	// Handle disconnection
-	socket.on('disconnect', () => {
-		console.log(`Client disconnected: ${socket.id}`);
-	});
-});
-
-// Start server
-const PORT = process.env.PORT || 3000;
-
-httpServer.listen(PORT, () => {
-	console.log(`🚀 Server running on port ${PORT}`);
-	console.log(`📡 Socket.IO ready`);
-	console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-});
-
+startServer();
