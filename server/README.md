@@ -2,6 +2,8 @@
 
 Backend server for EchoRoom chat application.
 
+> 📚 **Documentation:** See [`docs/`](./docs/) folder for detailed documentation.
+
 ## 🚀 Tech Stack
 
 - **Node.js** + **Express** - REST API
