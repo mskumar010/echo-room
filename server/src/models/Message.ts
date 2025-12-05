@@ -7,6 +7,8 @@ export interface IMessage {
 	text: string;
 	seq: number; // Sequential number for recovery
 	isSystemMessage?: boolean;
+	parentId?: string;
+	replyCount?: number;
 	createdAt: Date;
 	updatedAt: Date;
 }
@@ -37,6 +39,16 @@ const messageSchema = new Schema<IMessage>(
 		isSystemMessage: {
 			type: Boolean,
 			default: false,
+		},
+		parentId: {
+			type: Schema.Types.ObjectId,
+			ref: 'Message',
+			default: null,
+			index: true,
+		},
+		replyCount: {
+			type: Number,
+			default: 0,
 		},
 	},
 	{

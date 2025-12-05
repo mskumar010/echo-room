@@ -1,8 +1,8 @@
 import { Moon, Sun, Monitor } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useTheme } from '../../contexts/ThemeContext';
-import { Button } from './Button';
-import { cn } from '../../lib/utils';
+import { useTheme } from '@/contexts/ThemeContext';
+import { Button } from '@/components/common/Button';
+import { cn } from '@/lib/utils';
 
 export function ThemeToggle() {
 	const { theme, actualTheme, setTheme } = useTheme();
@@ -15,7 +15,7 @@ export function ThemeToggle() {
 		];
 
 	return (
-		<div 
+		<div
 			className="flex items-center gap-1 rounded-lg p-1"
 			style={{ backgroundColor: 'var(--color-bg-secondary)' }}
 		>

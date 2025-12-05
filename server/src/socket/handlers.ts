@@ -32,6 +32,15 @@ export async function initializeSequences(): Promise<void> {
 	}
 }
 
+// Helper to resolve room ID from slug or ID
+async function resolveRoomId(idOrSlug: string): Promise<string | null> {
+	if (idOrSlug.match(/^[0-9a-fA-F]{24}$/)) {
+		return idOrSlug;
+	}
+	const room = await Room.findOne({ slug: idOrSlug });
+	return room ? room._id.toString() : null;
+}
+
 export function setupSocketHandlers(io: Server): void {
 	io.on('connection', (socket: AuthenticatedSocket) => {
 		console.log(`Client connected: ${socket.id}`);
@@ -54,167 +63,51 @@ export function setupSocketHandlers(io: Server): void {
 
 		// Handle room joining
 		socket.on('room:join', async (data: { roomId: string }) => {
-			if (!socket.userId) {
-				socket.emit('error', { message: 'Not authenticated' });
-				return;
-			}
+			try {
+				if (!socket.userId) {
+					socket.emit('error', { message: 'Not authenticated' });
+					return;
+				}
 
-			const { roomId } = data;
-			socket.join(roomId);
-			console.log(`Socket ${socket.id} joined room: ${roomId}`);
+				const roomId = await resolveRoomId(data.roomId);
+				if (!roomId) {
+					socket.emit('error', { message: 'Room not found' });
+					return;
+				}
 
-			// Get room info and recent messages
-			const room = await Room.findById(roomId);
-			if (!room) {
-				socket.emit('error', { message: 'Room not found' });
-				return;
-			}
+				socket.join(roomId);
+				console.log(`Socket ${socket.id} joined room: ${roomId}`);
 
-			// Get recent messages
-			const recentMessages = await Message.find({ roomId })
-				.populate('senderId', 'displayName avatarUrl')
-				.sort({ seq: -1 })
-				.limit(50)
-				.lean();
+				// Get recent messages
+				let recentMessages = await Message.find({ roomId })
+					.populate('senderId', 'displayName avatarUrl')
+					.sort({ seq: -1 })
+					.limit(50)
+					.lean();
 
-			recentMessages.reverse();
+				// If no messages, populate with demo data
+				if (recentMessages.length === 0) {
+					try {
+						const { populateRoomMessages } = await import('../utils/demoData');
+						await populateRoomMessages(roomId);
 
-			socket.emit('room:joined', {
-				roomId,
-				messages: recentMessages.map((msg) => {
-					const sender = msg.senderId as any;
-					return {
-						id: msg._id.toString(),
-						roomId: msg.roomId.toString(),
-						sender: {
-							id: typeof sender === 'object' && sender._id ? sender._id.toString() : sender.toString(),
-							displayName: typeof sender === 'object' && sender.displayName ? sender.displayName : 'Unknown',
-							avatarUrl: typeof sender === 'object' && sender.avatarUrl ? sender.avatarUrl : undefined,
-						},
-						text: msg.text,
-						createdAt: msg.createdAt.toISOString(),
-						isSystemMessage: msg.isSystemMessage,
-					};
-				}),
-			});
-		});
+						// Re-fetch messages
+						recentMessages = await Message.find({ roomId })
+							.populate('senderId', 'displayName avatarUrl')
+							.sort({ seq: -1 })
+							.limit(50)
+							.lean();
+					} catch (error) {
+						console.error(`Failed to populate room ${roomId}:`, error);
+						// Continue with empty messages if population fails
+					}
+				}
 
-		// Handle room leaving
-		socket.on('room:leave', (data: { roomId: string }) => {
-			const { roomId } = data;
-			socket.leave(roomId);
-			console.log(`Socket ${socket.id} left room: ${roomId}`);
-			socket.emit('room:left', { roomId });
-		});
+				recentMessages.reverse();
 
-		// Handle message sending
-		socket.on('message:send', async (data: { roomId: string; text: string; tempId: string }) => {
-			if (!socket.userId) {
-				socket.emit('error', { message: 'Not authenticated' });
-				return;
-			}
-
-			const { roomId, text, tempId } = data;
-
-			// Validate room exists
-			const room = await Room.findById(roomId);
-			if (!room) {
-				socket.emit('error', { message: 'Room not found' });
-				return;
-			}
-
-			// Get user info
-			const user = await User.findById(socket.userId);
-			if (!user) {
-				socket.emit('error', { message: 'User not found' });
-				return;
-			}
-
-			// Create message
-			const seq = getNextSeq(roomId);
-			const message = new Message({
-				roomId,
-				senderId: socket.userId,
-				text: text.trim(),
-				seq,
-			});
-
-			await message.save();
-
-			// Populate sender info
-			await message.populate('senderId', 'displayName avatarUrl');
-
-			const messageData = {
-				id: message._id.toString(),
-				roomId: message.roomId.toString(),
-				sender: {
-					id: user._id.toString(),
-					displayName: user.displayName,
-					avatarUrl: user.avatarUrl,
-				},
-				text: message.text,
-				createdAt: message.createdAt.toISOString(),
-				isSystemMessage: message.isSystemMessage,
-			};
-
-			// Broadcast to room
-			io.to(roomId).emit('message:new', {
-				message: messageData,
-				seq,
-			});
-
-			// Acknowledge to sender
-			socket.emit('message:ack', {
-				tempId,
-				realId: message._id.toString(),
-			});
-		});
-
-		// Handle typing indicators
-		socket.on('typing:start', (data: { roomId: string }) => {
-			if (!socket.userId) return;
-
-			const { roomId } = data;
-			socket.to(roomId).emit('typing:update', {
-				roomId,
-				userId: socket.userId,
-				isTyping: true,
-			});
-		});
-
-		socket.on('typing:stop', (data: { roomId: string }) => {
-			if (!socket.userId) return;
-
-			const { roomId } = data;
-			socket.to(roomId).emit('typing:update', {
-				roomId,
-				userId: socket.userId,
-				isTyping: false,
-			});
-		});
-
-		// Handle connection recovery
-		socket.on('connection:recover', async (data: { roomId: string; lastSeenSeq: number }) => {
-			if (!socket.userId) {
-				socket.emit('error', { message: 'Not authenticated' });
-				return;
-			}
-
-			const { roomId, lastSeenSeq } = data;
-
-			// Find missed messages
-			const missedMessages = await Message.find({
-				roomId,
-				seq: { $gt: lastSeenSeq },
-			})
-				.populate('senderId', 'displayName avatarUrl')
-				.sort({ seq: 1 })
-				.lean();
-
-			if (missedMessages.length > 0) {
-				socket.emit('connection:missed', {
+				socket.emit('room:joined', {
 					roomId,
-					messages: missedMessages.map((msg) => {
+					messages: recentMessages.map((msg) => {
 						const sender = msg.senderId as any;
 						return {
 							id: msg._id.toString(),
@@ -227,12 +120,210 @@ export function setupSocketHandlers(io: Server): void {
 							text: msg.text,
 							createdAt: msg.createdAt.toISOString(),
 							isSystemMessage: msg.isSystemMessage,
-							seq: msg.seq,
+							parentId: msg.parentId ? msg.parentId.toString() : undefined,
+							replyCount: msg.replyCount,
 						};
 					}),
-					fromSeq: lastSeenSeq,
-					toSeq: missedMessages[missedMessages.length - 1].seq,
 				});
+
+				// Broadcast user count
+				const roomSockets = await io.in(roomId).fetchSockets();
+				io.to(roomId).emit('room:user_count', {
+					roomId,
+					count: roomSockets.length,
+				});
+			} catch (error) {
+				console.error(`Error in room:join for socket ${socket.id}:`, error);
+				socket.emit('error', { message: 'Failed to join room' });
+			}
+		});
+
+		// Handle room leaving
+		socket.on('room:leave', async (data: { roomId: string }) => {
+			try {
+				const roomId = await resolveRoomId(data.roomId);
+				if (!roomId) return;
+
+				socket.leave(roomId);
+				console.log(`Socket ${socket.id} left room: ${roomId}`);
+				socket.emit('room:left', { roomId });
+
+				// Broadcast user count
+				const roomSockets = await io.in(roomId).fetchSockets();
+				io.to(roomId).emit('room:user_count', {
+					roomId,
+					count: roomSockets.length,
+				});
+			} catch (error) {
+				console.error(`Error in room:leave for socket ${socket.id}:`, error);
+			}
+		});
+
+		// Handle message sending
+		socket.on('message:send', async (data: { roomId: string; text: string; tempId: string; parentId?: string }) => {
+			try {
+				if (!socket.userId) {
+					socket.emit('error', { message: 'Not authenticated' });
+					return;
+				}
+
+				const roomId = await resolveRoomId(data.roomId);
+				if (!roomId) {
+					socket.emit('error', { message: 'Room not found' });
+					return;
+				}
+
+				const { text, tempId, parentId } = data;
+
+				// Get user info
+				const user = await User.findById(socket.userId);
+				if (!user) {
+					socket.emit('error', { message: 'User not found' });
+					return;
+				}
+
+				// If parentId is provided, validate parent message exists
+				if (parentId) {
+					const parentMessage = await Message.findById(parentId);
+					if (!parentMessage) {
+						socket.emit('error', { message: 'Parent message not found' });
+						return;
+					}
+					// Increment reply count
+					parentMessage.replyCount = (parentMessage.replyCount || 0) + 1;
+					await parentMessage.save();
+				}
+
+				// Create message
+				const seq = getNextSeq(roomId);
+				const message = new Message({
+					roomId,
+					senderId: socket.userId,
+					text: text.trim(),
+					seq,
+					parentId: parentId || null,
+				});
+
+				await message.save();
+
+				// Populate sender info
+				await message.populate('senderId', 'displayName avatarUrl');
+
+				const messageData = {
+					id: message._id.toString(),
+					roomId: message.roomId.toString(),
+					sender: {
+						id: user._id.toString(),
+						displayName: user.displayName,
+						avatarUrl: user.avatarUrl,
+					},
+					text: message.text,
+					createdAt: message.createdAt.toISOString(),
+					isSystemMessage: message.isSystemMessage,
+					parentId: message.parentId ? message.parentId.toString() : undefined,
+					replyCount: message.replyCount,
+				};
+
+				// Broadcast to room
+				io.to(roomId).emit('message:new', {
+					message: messageData,
+					seq,
+				});
+
+				// Acknowledge to sender
+				socket.emit('message:ack', {
+					tempId,
+					realId: message._id.toString(),
+				});
+			} catch (error) {
+				console.error(`Error in message:send for socket ${socket.id}:`, error);
+				socket.emit('error', { message: 'Failed to send message' });
+			}
+		});
+
+		// Handle typing indicators
+		socket.on('typing:start', async (data: { roomId: string }) => {
+			try {
+				if (!socket.userId) return;
+				const roomId = await resolveRoomId(data.roomId);
+				if (!roomId) return;
+
+				socket.to(roomId).emit('typing:update', {
+					roomId,
+					userId: socket.userId,
+					isTyping: true,
+				});
+			} catch (error) {
+				console.error(`Error in typing:start for socket ${socket.id}:`, error);
+			}
+		});
+
+		socket.on('typing:stop', async (data: { roomId: string }) => {
+			try {
+				if (!socket.userId) return;
+				const roomId = await resolveRoomId(data.roomId);
+				if (!roomId) return;
+
+				socket.to(roomId).emit('typing:update', {
+					roomId,
+					userId: socket.userId,
+					isTyping: false,
+				});
+			} catch (error) {
+				console.error(`Error in typing:stop for socket ${socket.id}:`, error);
+			}
+		});
+
+		// Handle connection recovery
+		socket.on('connection:recover', async (data: { roomId: string; lastSeenSeq: number }) => {
+			try {
+				if (!socket.userId) {
+					socket.emit('error', { message: 'Not authenticated' });
+					return;
+				}
+
+				const roomId = await resolveRoomId(data.roomId);
+				if (!roomId) return;
+
+				const { lastSeenSeq } = data;
+
+				// Find missed messages
+				const missedMessages = await Message.find({
+					roomId,
+					seq: { $gt: lastSeenSeq },
+				})
+					.populate('senderId', 'displayName avatarUrl')
+					.sort({ seq: 1 })
+					.lean();
+
+				if (missedMessages.length > 0) {
+					socket.emit('connection:missed', {
+						roomId,
+						messages: missedMessages.map((msg) => {
+							const sender = msg.senderId as any;
+							return {
+								id: msg._id.toString(),
+								roomId: msg.roomId.toString(),
+								sender: {
+									id: typeof sender === 'object' && sender._id ? sender._id.toString() : sender.toString(),
+									displayName: typeof sender === 'object' && sender.displayName ? sender.displayName : 'Unknown',
+									avatarUrl: typeof sender === 'object' && sender.avatarUrl ? sender.avatarUrl : undefined,
+								},
+								text: msg.text,
+								createdAt: msg.createdAt.toISOString(),
+								isSystemMessage: msg.isSystemMessage,
+								seq: msg.seq,
+								parentId: msg.parentId ? msg.parentId.toString() : undefined,
+								replyCount: msg.replyCount,
+							};
+						}),
+						fromSeq: lastSeenSeq,
+						toSeq: missedMessages[missedMessages.length - 1].seq,
+					});
+				}
+			} catch (error) {
+				console.error(`Error in connection:recover for socket ${socket.id}:`, error);
+				socket.emit('error', { message: 'Failed to recover connection state' });
 			}
 		});
 

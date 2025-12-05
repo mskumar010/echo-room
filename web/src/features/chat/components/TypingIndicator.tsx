@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Avatar } from '../../../components/common/Avatar';
+import { Avatar } from '@/components/common/Avatar';
 
 interface TypingIndicatorProps {
 	userNames: string[];

@@ -14,6 +14,8 @@ export interface Room {
 	name: string;
 	slug: string;
 	description?: string;
+	tags: string[];
+	members: string[];
 	createdBy: string;
 	createdAt: string;
 }
@@ -27,6 +29,8 @@ export interface Message {
 	createdAt: string;
 	seq: number;
 	isSystemMessage?: boolean;
+	parentId?: string;
+	replyCount?: number;
 }
 
 export interface UIMessage {
@@ -42,6 +46,8 @@ export interface UIMessage {
 	isMine: boolean;
 	isOptimistic?: boolean;
 	isSystemMessage?: boolean;
+	parentId?: string;
+	replyCount?: number;
 }
 
 // Socket event types

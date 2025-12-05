@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { ChatArea } from '../components/layout/ChatArea';
-import { WelcomeRoom } from '../features/onboarding/WelcomeRoom';
-import { setFirstTime, completeOnboarding } from '../features/onboarding/onboardingSlice';
-import type { RootState } from '../app/store';
+import { ChatArea } from '@/components/layout/ChatArea';
+import { WelcomeRoom } from '@/features/onboarding/WelcomeRoom';
+import { setFirstTime, completeOnboarding } from '@/features/onboarding/onboardingSlice';
+import type { RootState } from '@/app/store';
 
 export function HomePage() {
 	const dispatch = useDispatch();
@@ -17,7 +17,7 @@ export function HomePage() {
 		if (user) {
 			// Check localStorage first
 			const hasSeenWelcome = localStorage.getItem('hasSeenWelcomeRoom') === 'true';
-			
+
 			// If user has completed onboarding flag, they're not first-time
 			if (user.hasCompletedOnboarding) {
 				dispatch(setFirstTime(false));

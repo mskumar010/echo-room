@@ -1,16 +1,17 @@
 import { useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useSocket } from './useSocket';
+import { useSocket } from '@/hooks/useSocket';
 import {
 	addMessage,
 	setTypingUser,
 	updateOptimisticMessage,
 	setMessages,
-} from '../features/chat/chatSlice';
-import { requestRecovery, recoverMessages, updateLastSeenSeq } from '../features/connection/connectionSlice';
-import { useGetMessagesQuery } from '../api/messagesApi';
-import type { SocketMessageNew, SocketTypingUpdate } from '../types';
-import type { AppDispatch, RootState } from '../app/store';
+	setUserCount,
+} from '@/features/chat/chatSlice';
+import { requestRecovery, recoverMessages, updateLastSeenSeq } from '@/features/connection/connectionSlice';
+import { useGetMessagesQuery } from '@/api/messagesApi';
+import type { SocketMessageNew, SocketTypingUpdate } from '@/types';
+import type { AppDispatch, RootState } from '@/app/store';
 
 interface UseRoomSocketOptions {
 	roomId: string;
@@ -29,7 +30,7 @@ export function useRoomSocket({ roomId, userId }: UseRoomSocketOptions) {
 	// Fetch initial messages
 	const { data: initialMessages } = useGetMessagesQuery(
 		{ roomId },
-		{ skip: !roomId }
+		{ skip: !roomId || roomId === 'welcome' }
 	);
 
 	useEffect(() => {
@@ -61,21 +62,29 @@ export function useRoomSocket({ roomId, userId }: UseRoomSocketOptions) {
 	}, [initialMessages, roomId, userId, dispatch]);
 
 	useEffect(() => {
-		if (!socket || !roomId) {
+		if (!socket || !roomId || roomId === 'welcome') {
 			return;
 		}
 
-		// Join room
-		socket.emit('room:join', { roomId });
+		// Join room and request recovery
+		const joinAndRecover = () => {
+			console.log(`Joining room ${roomId} (Last seen seq: ${roomLastSeq})`);
+			socket.emit('room:join', { roomId });
 
-		// Request recovery if needed
-		if (roomLastSeq > 0) {
-			dispatch(requestRecovery());
-			socket.emit('connection:recover', {
-				roomId,
-				lastSeenSeq: roomLastSeq,
-			});
-		}
+			if (roomLastSeq > 0) {
+				dispatch(requestRecovery());
+				socket.emit('connection:recover', {
+					roomId,
+					lastSeenSeq: roomLastSeq,
+				});
+			}
+		};
+
+		// Initial join
+		joinAndRecover();
+
+		// Re-join on reconnect
+		socket.on('connect', joinAndRecover);
 
 		// Message handlers
 		const handleMessageNew = (data: SocketMessageNew) => {
@@ -118,7 +127,7 @@ export function useRoomSocket({ roomId, userId }: UseRoomSocketOptions) {
 
 		const handleConnectionMissed = (data: {
 			roomId: string;
-			messages: Array<{ seq: number; [key: string]: unknown }>;
+			messages: Array<{ seq: number;[key: string]: unknown }>;
 		}) => {
 			if (data.roomId === roomIdRef.current && data.messages.length > 0) {
 				dispatch(recoverMessages({ roomId: roomIdRef.current, messages: data.messages }));
@@ -132,6 +141,8 @@ export function useRoomSocket({ roomId, userId }: UseRoomSocketOptions) {
 						text: string;
 						createdAt: string;
 						seq: number;
+						parentId?: string;
+						replyCount?: number;
 					};
 					return {
 						id: m._id,
@@ -144,6 +155,8 @@ export function useRoomSocket({ roomId, userId }: UseRoomSocketOptions) {
 						text: m.text,
 						createdAt: m.createdAt,
 						isMine: m.senderId === userId,
+						parentId: m.parentId,
+						replyCount: m.replyCount,
 					};
 				});
 				recoveredMessages.forEach((msg) => {
@@ -152,10 +165,40 @@ export function useRoomSocket({ roomId, userId }: UseRoomSocketOptions) {
 			}
 		};
 
+		const handleRoomJoined = (data: { roomId: string; messages: any[] }) => {
+			if (data.roomId === roomIdRef.current) {
+				const uiMessages = data.messages.map((msg) => ({
+					id: msg.id,
+					roomId: msg.roomId,
+					sender: msg.sender,
+					text: msg.text,
+					createdAt: msg.createdAt,
+					isMine: msg.sender.id === userId,
+					parentId: msg.parentId,
+					replyCount: msg.replyCount,
+				}));
+				dispatch(setMessages({ roomId: roomIdRef.current, messages: uiMessages }));
+
+				// Update last seen seq
+				const maxSeq = Math.max(...data.messages.map((m) => m.seq || 0));
+				if (maxSeq > 0) {
+					dispatch(updateLastSeenSeq({ roomId: roomIdRef.current, seq: maxSeq }));
+				}
+			}
+		};
+
+		const handleUserCount = (data: { roomId: string; count: number }) => {
+			if (data.roomId === roomIdRef.current) {
+				dispatch(setUserCount({ roomId: roomIdRef.current, count: data.count }));
+			}
+		};
+
 		socket.on('message:new', handleMessageNew);
 		socket.on('message:ack', handleMessageAck);
 		socket.on('typing:update', handleTypingUpdate);
 		socket.on('connection:missed', handleConnectionMissed);
+		socket.on('room:joined', handleRoomJoined);
+		socket.on('room:user_count', handleUserCount);
 
 		// Cleanup
 		return () => {
@@ -165,10 +208,11 @@ export function useRoomSocket({ roomId, userId }: UseRoomSocketOptions) {
 				socket.off('message:ack', handleMessageAck);
 				socket.off('typing:update', handleTypingUpdate);
 				socket.off('connection:missed', handleConnectionMissed);
+				socket.off('room:joined', handleRoomJoined);
+				socket.off('room:user_count', handleUserCount);
 			}
 		};
 	}, [socket, roomId, userId, dispatch, roomLastSeq]);
 
-	return socket;
+	return { socket, isLoading: !initialMessages && roomId !== 'welcome' };
 }
-

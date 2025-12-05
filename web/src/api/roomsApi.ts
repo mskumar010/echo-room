@@ -1,42 +1,50 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { Room } from '../types';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { createApi } from '@reduxjs/toolkit/query/react';
+import type { Room } from '@/types';
+import { baseQueryWithReauth } from '@/api/baseQuery';
 
 export const roomsApi = createApi({
 	reducerPath: 'roomsApi',
-	baseQuery: fetchBaseQuery({
-		baseUrl: `${API_URL}/rooms`,
-		credentials: 'include',
-		prepareHeaders: (headers, { getState }) => {
-			const state = getState() as { auth: { accessToken: string | null } };
-			const token = state.auth.accessToken;
-			if (token) {
-				headers.set('authorization', `Bearer ${token}`);
-			}
-			return headers;
-		},
-	}),
+	baseQuery: baseQueryWithReauth,
 	tagTypes: ['Room'],
 	endpoints: (builder) => ({
 		getRooms: builder.query<Room[], void>({
-			query: () => '',
+			query: () => '/rooms',
 			providesTags: ['Room'],
 		}),
 		getRoom: builder.query<Room, string>({
-			query: (id) => `/${id}`,
+			query: (id) => `/rooms/${id}`,
 			providesTags: (_result, _error, id) => [{ type: 'Room', id }],
 		}),
-		createRoom: builder.mutation<Room, { name: string; description?: string }>({
+		createRoom: builder.mutation<Room, { name: string; description?: string; tags: string[] }>({
 			query: (body) => ({
-				url: '',
+				url: '/rooms',
 				method: 'POST',
 				body,
 			}),
 			invalidatesTags: ['Room'],
 		}),
+		joinRoom: builder.mutation<void, string>({
+			query: (roomId) => ({
+				url: `/rooms/${roomId}/join`,
+				method: 'POST',
+			}),
+			invalidatesTags: (_result, _error, arg) => [{ type: 'Room', id: arg }, 'Room'],
+		}),
+		leaveRoom: builder.mutation<void, string>({
+			query: (roomId) => ({
+				url: `/rooms/${roomId}/leave`,
+				method: 'POST',
+			}),
+			invalidatesTags: (_result, _error, arg) => [{ type: 'Room', id: arg }, 'Room'],
+		}),
 	}),
 });
 
-export const { useGetRoomsQuery, useGetRoomQuery, useCreateRoomMutation } = roomsApi;
+export const {
+	useGetRoomsQuery,
+	useGetRoomQuery,
+	useCreateRoomMutation,
+	useJoinRoomMutation,
+	useLeaveRoomMutation,
+} = roomsApi;
 

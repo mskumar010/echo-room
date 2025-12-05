@@ -5,6 +5,8 @@ export interface IRoom {
 	name: string;
 	slug: string;
 	description?: string;
+	tags: string[];
+	members: string[]; // User IDs
 	createdBy: string; // User ID
 	createdAt: Date;
 	updatedAt: Date;
@@ -33,6 +35,17 @@ const roomSchema = new Schema<IRoom>(
 			ref: 'User',
 			required: true,
 		} as any,
+		tags: {
+			type: [String],
+			required: true,
+			default: [],
+		},
+		members: [
+			{
+				type: Schema.Types.ObjectId,
+				ref: 'User',
+			},
+		],
 	},
 	{
 		timestamps: true,
@@ -40,7 +53,6 @@ const roomSchema = new Schema<IRoom>(
 );
 
 // Index for faster queries
-roomSchema.index({ slug: 1 });
 roomSchema.index({ createdBy: 1 });
 
 export const Room = mongoose.model<IRoom>('Room', roomSchema);

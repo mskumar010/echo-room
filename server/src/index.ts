@@ -1,8 +1,11 @@
+import dotenv from 'dotenv';
+// Load environment variables immediately
+dotenv.config();
+
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
 import { connectDatabase } from './config/database';
 import { setupSocketHandlers, initializeSequences } from './socket/handlers';
@@ -10,6 +13,7 @@ import authRoutes from './routes/auth';
 import roomsRoutes from './routes/rooms';
 import messagesRoutes from './routes/messages';
 import { errorHandler } from './middleware/errorHandler';
+import { seedRooms } from './scripts/seedRooms';
 
 // Load environment variables
 dotenv.config();
@@ -55,6 +59,9 @@ async function startServer() {
 
 		// Initialize sequence numbers
 		await initializeSequences();
+
+		// Seed default rooms
+		await seedRooms();
 
 		// Setup Socket.IO handlers
 		setupSocketHandlers(io);

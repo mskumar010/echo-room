@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { getSocket, disconnectSocket } from '../lib/socket';
-import type { RootState } from '../app/store';
-import { setStatus, setError, setLastEventId } from '../features/connection/connectionSlice';
-import type { SocketMessageNew, SocketTypingUpdate } from '../types';
+import { getSocket, disconnectSocket } from '@/lib/socket';
+import type { RootState } from '@/app/store';
+import { setStatus, setError, setLastEventId } from '@/features/connection/connectionSlice';
+import type { SocketMessageNew, SocketTypingUpdate } from '@/types';
 
 export function useSocket() {
 	const dispatch = useDispatch();

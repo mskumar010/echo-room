@@ -16,7 +16,9 @@ router.get('/', authenticateToken, async (_req, res, next) => {
 				name: room.name,
 				slug: room.slug,
 				description: room.description,
-				createdBy: room.createdBy.toString(),
+				tags: room.tags || [],
+				members: room.members.map((id) => id.toString()),
+				createdBy: room.createdBy ? room.createdBy.toString() : 'system',
 				createdAt: room.createdAt.toISOString(),
 			}))
 		);
@@ -28,8 +30,9 @@ router.get('/', authenticateToken, async (_req, res, next) => {
 // Get single room
 router.get('/:id', authenticateToken, async (req, res, next) => {
 	try {
+		const isObjectId = req.params.id.match(/^[0-9a-fA-F]{24}$/);
 		const room = await Room.findOne({
-			$or: [{ _id: req.params.id }, { slug: req.params.id }],
+			$or: [{ _id: isObjectId ? req.params.id : null }, { slug: req.params.id }],
 		}).populate('createdBy', 'displayName');
 
 		if (!room) {
@@ -41,7 +44,9 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
 			name: room.name,
 			slug: room.slug,
 			description: room.description,
-			createdBy: room.createdBy.toString(),
+			tags: room.tags || [],
+			members: room.members.map((id) => id.toString()),
+			createdBy: room.createdBy ? room.createdBy.toString() : 'system',
 			createdAt: room.createdAt.toISOString(),
 		});
 	} catch (error) {
@@ -52,10 +57,14 @@ router.get('/:id', authenticateToken, async (req, res, next) => {
 // Create room
 router.post('/', authenticateToken, async (req: AuthRequest, res, next) => {
 	try {
-		const { name, description } = req.body;
+		const { name, description, tags } = req.body;
 
 		if (!name) {
 			throw new AppError('Room name is required', 400);
+		}
+
+		if (!tags || !Array.isArray(tags) || tags.length === 0) {
+			throw new AppError('At least one tag is required', 400);
 		}
 
 		// Generate slug from name
@@ -76,19 +85,80 @@ router.post('/', authenticateToken, async (req: AuthRequest, res, next) => {
 			name,
 			slug,
 			description,
+			tags,
 			createdBy: req.userId,
 		});
 
 		await room.save();
+
+		// Populate room with initial messages
+		try {
+			const { populateRoomMessages } = await import('../utils/demoData');
+			await populateRoomMessages(room._id.toString());
+		} catch (popError: any) {
+			console.error('Failed to populate room:', popError);
+			// Don't fail the request, just log it, or return a warning?
+			// For now, let's fail it so we see the error in the UI
+			throw new AppError(`Room created but failed to populate: ${popError.message}`, 500);
+		}
 
 		res.status(201).json({
 			_id: room._id.toString(),
 			name: room.name,
 			slug: room.slug,
 			description: room.description,
+			tags: room.tags,
 			createdBy: room.createdBy.toString(),
 			createdAt: room.createdAt.toISOString(),
 		});
+	} catch (error: any) {
+		console.error('Room creation error:', error);
+		next(error);
+	}
+});
+
+// Join room
+router.post('/:id/join', authenticateToken, async (req: AuthRequest, res, next) => {
+	try {
+		const room = await Room.findOne({
+			$or: [{ _id: req.params.id.match(/^[0-9a-fA-F]{24}$/) ? req.params.id : null }, { slug: req.params.id }],
+		});
+
+		if (!room) {
+			throw new AppError('Room not found', 404);
+		}
+
+		// Check if already member
+		if (room.members.includes(req.userId as any)) {
+			res.json({ message: 'Already a member' });
+			return;
+		}
+
+		room.members.push(req.userId as any);
+		await room.save();
+
+		res.json({ message: 'Joined room successfully' });
+	} catch (error) {
+		next(error);
+	}
+});
+
+// Leave room
+router.post('/:id/leave', authenticateToken, async (req: AuthRequest, res, next) => {
+	try {
+		const room = await Room.findOne({
+			$or: [{ _id: req.params.id.match(/^[0-9a-fA-F]{24}$/) ? req.params.id : null }, { slug: req.params.id }],
+		});
+
+		if (!room) {
+			throw new AppError('Room not found', 404);
+		}
+
+		// Remove from members
+		room.members = room.members.filter((id) => id.toString() !== req.userId);
+		await room.save();
+
+		res.json({ message: 'Left room successfully' });
 	} catch (error) {
 		next(error);
 	}

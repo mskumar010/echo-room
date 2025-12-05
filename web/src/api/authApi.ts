@@ -1,54 +1,49 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { AuthResponse, LoginCredentials, RegisterCredentials, User } from '../types';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { createApi } from '@reduxjs/toolkit/query/react';
+import type { AuthResponse, LoginCredentials, RegisterCredentials, User } from '@/types';
+import { baseQueryWithReauth } from '@/api/baseQuery';
 
 export const authApi = createApi({
 	reducerPath: 'authApi',
-	baseQuery: fetchBaseQuery({
-		baseUrl: `${API_URL}/auth`,
-		credentials: 'include',
-		prepareHeaders: (headers, { getState }) => {
-			// Get token from Redux state
-			const state = getState() as { auth: { accessToken: string | null } };
-			const token = state.auth.accessToken;
-			if (token) {
-				headers.set('authorization', `Bearer ${token}`);
-			}
-			return headers;
-		},
-	}),
+	baseQuery: baseQueryWithReauth,
 	tagTypes: ['User'],
 	endpoints: (builder) => ({
 		register: builder.mutation<AuthResponse, RegisterCredentials>({
 			query: (credentials) => ({
-				url: '/register',
+				url: '/auth/register',
 				method: 'POST',
 				body: credentials,
 			}),
 		}),
 		login: builder.mutation<AuthResponse, LoginCredentials>({
 			query: (credentials) => ({
-				url: '/login',
+				url: '/auth/login',
 				method: 'POST',
 				body: credentials,
 			}),
 		}),
 		refresh: builder.mutation<{ accessToken: string }, void>({
 			query: () => ({
-				url: '/refresh',
+				url: '/auth/refresh',
 				method: 'POST',
 			}),
 		}),
 		logout: builder.mutation<void, void>({
 			query: () => ({
-				url: '/logout',
+				url: '/auth/logout',
 				method: 'POST',
 			}),
 		}),
 		getMe: builder.query<User, void>({
-			query: () => '/me',
+			query: () => '/auth/me',
 			providesTags: ['User'],
+		}),
+		updateProfile: builder.mutation<User, { displayName: string; avatarUrl?: string }>({
+			query: (data) => ({
+				url: '/auth/me',
+				method: 'PUT',
+				body: data,
+			}),
+			invalidatesTags: ['User'],
 		}),
 	}),
 });
@@ -59,5 +54,6 @@ export const {
 	useRefreshMutation,
 	useLogoutMutation,
 	useGetMeQuery,
+	useUpdateProfileMutation,
 } = authApi;
 

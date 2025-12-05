@@ -1,17 +1,20 @@
 import { createSlice } from '@reduxjs/toolkit';
 import type { PayloadAction } from '@reduxjs/toolkit';
-import type { UIMessage, SocketMessageNew } from '../../types';
-import { generateTempId } from '../../lib/utils';
+import type { UIMessage, SocketMessageNew } from '@/types';
+import { generateTempId } from '@/lib/utils';
 
 interface ChatState {
 	messages: {
 		[roomId: string]: UIMessage[];
 	};
 	typingUsers: {
-		[roomId: string]: Set<string>;
+		[roomId: string]: string[];
 	};
 	onlineUsers: {
-		[roomId: string]: Set<string>;
+		[roomId: string]: string[];
+	};
+	userCounts: {
+		[roomId: string]: number;
 	};
 }
 
@@ -19,12 +22,21 @@ const initialState: ChatState = {
 	messages: {},
 	typingUsers: {},
 	onlineUsers: {},
+	userCounts: {},
 };
 
 export const chatSlice = createSlice({
 	name: 'chat',
 	initialState,
 	reducers: {
+		// ... existing reducers ...
+		setUserCount: (
+			state,
+			action: PayloadAction<{ roomId: string; count: number }>
+		) => {
+			const { roomId, count } = action.payload;
+			state.userCounts[roomId] = count;
+		},
 		addMessage: (
 			state,
 			action: PayloadAction<{ roomId: string; message: UIMessage }>
@@ -91,12 +103,16 @@ export const chatSlice = createSlice({
 		) => {
 			const { roomId, userId, isTyping } = action.payload;
 			if (!state.typingUsers[roomId]) {
-				state.typingUsers[roomId] = new Set();
+				state.typingUsers[roomId] = [];
 			}
 			if (isTyping) {
-				state.typingUsers[roomId].add(userId);
+				if (!state.typingUsers[roomId].includes(userId)) {
+					state.typingUsers[roomId].push(userId);
+				}
 			} else {
-				state.typingUsers[roomId].delete(userId);
+				state.typingUsers[roomId] = state.typingUsers[roomId].filter(
+					(id) => id !== userId
+				);
 			}
 		},
 		setOnlineUsers: (
@@ -104,7 +120,7 @@ export const chatSlice = createSlice({
 			action: PayloadAction<{ roomId: string; userIds: string[] }>
 		) => {
 			const { roomId, userIds } = action.payload;
-			state.onlineUsers[roomId] = new Set(userIds);
+			state.onlineUsers[roomId] = userIds;
 		},
 		clearRoom: (state, action: PayloadAction<string>) => {
 			const roomId = action.payload;
@@ -122,6 +138,7 @@ export const {
 	updateOptimisticMessage,
 	setTypingUser,
 	setOnlineUsers,
+	setUserCount,
 	clearRoom,
 } = chatSlice.actions;
 

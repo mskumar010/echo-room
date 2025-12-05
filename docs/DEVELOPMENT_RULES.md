@@ -232,6 +232,13 @@ Before committing code, verify:
    - Keep animations subtle and performant
    - Respect `prefers-reduced-motion`
 
+### Import Rules
+
+1. **Use Path Aliases**
+   - Use `@/` for all internal imports
+   - Avoid relative paths like `../../` or `./`
+   - Example: `import { Button } from '@/components/ui/Button'`
+
 ### File Organization
 
 ```

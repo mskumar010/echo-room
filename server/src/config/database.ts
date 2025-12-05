@@ -1,9 +1,9 @@
 import mongoose from 'mongoose';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/echoroom';
-
 export async function connectDatabase(): Promise<void> {
+	const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/echoroom';
 	try {
+		console.log('Connecting to MongoDB:', MONGODB_URI);
 		await mongoose.connect(MONGODB_URI);
 		console.log('✅ MongoDB connected');
 	} catch (error) {

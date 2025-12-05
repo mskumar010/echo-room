@@ -164,5 +164,39 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res, next) => {
 	}
 });
 
+// Update current user
+router.put('/me', authenticateToken, async (req: AuthRequest, res, next) => {
+	try {
+		const { displayName, avatarUrl } = req.body;
+
+		if (!displayName) {
+			throw new AppError('Display name is required', 400);
+		}
+
+		const user = await User.findById(req.userId);
+		if (!user) {
+			throw new AppError('User not found', 404);
+		}
+
+		user.displayName = displayName;
+		if (avatarUrl !== undefined) {
+			user.avatarUrl = avatarUrl;
+		}
+
+		await user.save();
+
+		res.json({
+			_id: user._id.toString(),
+			email: user.email,
+			displayName: user.displayName,
+			avatarUrl: user.avatarUrl,
+			hasCompletedOnboarding: user.hasCompletedOnboarding,
+			createdAt: user.createdAt.toISOString(),
+		});
+	} catch (error) {
+		next(error);
+	}
+});
+
 export default router;
 

@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { useRegisterMutation } from '../api/authApi';
-import { Button } from '../components/common/Button';
-import { Input } from '../components/common/Input';
+import { toast } from 'react-hot-toast';
+import { useRegisterMutation } from '@/api/authApi';
+import { useDispatch } from 'react-redux';
+import { setFirstTime } from '@/features/onboarding/onboardingSlice';
+import { Button } from '@/components/common/Button';
+import { Input } from '@/components/common/Input';
 
 export function RegisterPage() {
 	const navigate = useNavigate();
+	const dispatch = useDispatch();
 	const [register, { isLoading, error }] = useRegisterMutation();
 
 	const [formData, setFormData] = useState({
@@ -56,9 +60,19 @@ export function RegisterPage() {
 				password: formData.password,
 				displayName: formData.displayName,
 			}).unwrap();
-			navigate('/');
+
+			toast.success('Account created successfully!');
+			// Set first time flag and redirect to welcome
+			dispatch(setFirstTime(true));
+			navigate('/welcome');
 		} catch (err: unknown) {
 			console.error('Registration failed:', err);
+			const errorMessage =
+				err && typeof err === 'object' && 'data' in err &&
+					(err.data as { message?: string }).message
+					? (err.data as { message: string }).message
+					: 'Registration failed. Please try again.';
+			toast.error(errorMessage);
 		}
 	};
 
@@ -71,7 +85,7 @@ export function RegisterPage() {
 	};
 
 	return (
-		<div 
+		<div
 			className="flex min-h-screen items-center justify-center px-4"
 			style={{ backgroundColor: 'var(--color-bg-primary)' }}
 		>
@@ -89,7 +103,7 @@ export function RegisterPage() {
 
 				<form onSubmit={handleSubmit} className="space-y-6">
 					{error && 'data' in error && (
-						<div 
+						<div
 							className="rounded-lg border p-3 text-sm"
 							style={{
 								backgroundColor: 'rgba(239, 68, 68, 0.1)',

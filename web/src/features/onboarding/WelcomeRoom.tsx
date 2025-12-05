@@ -1,11 +1,11 @@
 import { useEffect } from 'react';
-import { ChatArea } from '../../components/layout/ChatArea';
-import { MessageList } from '../chat/components/MessageList';
-import { MessageInput } from '../chat/components/MessageInput';
-import { addMessage } from '../chat/chatSlice';
+import { ChatArea } from '@/components/layout/ChatArea';
+import { MessageList } from '@/features/chat/components/MessageList';
+import { MessageInput } from '@/features/chat/components/MessageInput';
+import { addMessage } from '@/features/chat/chatSlice';
 import { useDispatch, useSelector } from 'react-redux';
-import type { AppDispatch, RootState } from '../../app/store';
-import type { UIMessage } from '../../types';
+import type { AppDispatch, RootState } from '@/app/store';
+import type { UIMessage } from '@/types';
 
 interface WelcomeMessage {
 	text: string;
@@ -19,49 +19,76 @@ interface WelcomeMessage {
 
 const WELCOME_MESSAGES: WelcomeMessage[] = [
 	{
-		text: `Welcome to EchoRoom! 👋`,
+		text: `System initialized. User detected. Loading onboarding protocol v2.4...`,
 		sender: {
-			id: 'system',
-			displayName: 'EchoRoom',
+			id: 'tech-lead',
+			displayName: 'DevOps Dave 🛠️',
+			avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Dave',
 		},
-		delay: 0,
+		delay: 500,
 	},
 	{
-		text: `We're excited to have you here! This is your personal welcome room where you can learn about EchoRoom.`,
+		text: `Wait, wait! Dave, stop scaring them with the technical jargon!`,
 		sender: {
-			id: 'system',
-			displayName: 'EchoRoom',
-		},
-		delay: 1000,
-	},
-	{
-		text: `EchoRoom is a real-time chat application with Discord-style rooms. You can join different rooms, chat with others, and stay connected.`,
-		sender: {
-			id: 'system',
-			displayName: 'EchoRoom',
+			id: 'simplifier',
+			displayName: 'Simple Sarah ✨',
+			avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah',
 		},
 		delay: 2000,
 	},
 	{
-		text: `Here's what you can do:
-• Browse rooms in the sidebar
-• Join any room to start chatting
-• Send messages in real-time
-• See who's typing
-• Customize your experience`,
+		text: `Hi there! 👋 Ignore Dave. He thinks everyone speaks binary. Welcome to EchoRoom! It's actually super simple to use.`,
 		sender: {
-			id: 'system',
-			displayName: 'EchoRoom',
-		},
-		delay: 3000,
-	},
-	{
-		text: `Feel free to explore! You can reply to these messages, but they're just here to help you get started. When you're ready, check out the other rooms in the sidebar.`,
-		sender: {
-			id: 'system',
-			displayName: 'EchoRoom',
+			id: 'simplifier',
+			displayName: 'Simple Sarah ✨',
+			avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah',
 		},
 		delay: 4000,
+	},
+	{
+		text: `Technically, binary is the foundation of all digital communication, Sarah. I was merely establishing a handshake.`,
+		sender: {
+			id: 'tech-lead',
+			displayName: 'DevOps Dave 🛠️',
+			avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Dave',
+		},
+		delay: 7000,
+	},
+	{
+		text: `Hey everyone! Let's focus. Welcome to the community! 🌟 I'm here to help you find your way around.`,
+		sender: {
+			id: 'guide',
+			displayName: 'Community Guide 🗺️',
+			avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Guide',
+		},
+		delay: 9000,
+	},
+	{
+		text: `You can join any room on the left sidebar. "General" is great for hanging out, and "Tech Talk" is where Dave lives. 😉`,
+		sender: {
+			id: 'guide',
+			displayName: 'Community Guide 🗺️',
+			avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Guide',
+		},
+		delay: 12000,
+	},
+	{
+		text: `Correct. The latency in Tech Talk is optimized for high-frequency knowledge transfer.`,
+		sender: {
+			id: 'tech-lead',
+			displayName: 'DevOps Dave 🛠️',
+			avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Dave',
+		},
+		delay: 15000,
+	},
+	{
+		text: `See? Easy! Just click a room and start chatting. Have fun! 🎉`,
+		sender: {
+			id: 'simplifier',
+			displayName: 'Simple Sarah ✨',
+			avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah',
+		},
+		delay: 17000,
 	},
 ];
 
@@ -79,12 +106,13 @@ export function WelcomeRoom({ userName, userId, roomId, onComplete }: WelcomeRoo
 	useEffect(() => {
 		// Add personalized welcome message
 		const personalizedMessage: WelcomeMessage = {
-			text: `Hey ${userName}! Let's get you started.`,
+			text: `Hey ${userName}! So glad you joined us!`,
 			sender: {
-				id: 'system',
-				displayName: 'EchoRoom',
+				id: 'guide',
+				displayName: 'Community Guide 🗺️',
+				avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Guide',
 			},
-			delay: 500,
+			delay: 0,
 		};
 
 		const allMessages = [personalizedMessage, ...WELCOME_MESSAGES];
@@ -101,7 +129,7 @@ export function WelcomeRoom({ userName, userId, roomId, onComplete }: WelcomeRoo
 					text: msg.text,
 					createdAt: new Date().toISOString(),
 					isMine: false,
-					isSystemMessage: true,
+					isSystemMessage: false,
 				};
 
 				// Add to Redux

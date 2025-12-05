@@ -2,13 +2,16 @@ import { Home, Hash, Plus, Settings, LogOut } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { useGetRoomsQuery } from '../../api/roomsApi';
-import { useLogoutMutation } from '../../api/authApi';
-import { cn } from '../../lib/utils';
-import { setActiveRoom } from '../../features/rooms/roomsSlice';
-import { logout } from '../../features/auth/authSlice';
-import { ThemeToggleCompact } from '../common/ThemeToggle';
-import type { RootState } from '../../app/store';
+import { useGetRoomsQuery } from '@/api/roomsApi';
+import { useLogoutMutation } from '@/api/authApi';
+import { cn } from '@/lib/utils';
+import { setActiveRoom } from '@/features/rooms/roomsSlice';
+import { logout } from '@/features/auth/authSlice';
+import { useState } from 'react';
+import { ThemeToggleCompact } from '@/components/common/ThemeToggle';
+import { RoomListSkeleton } from '@/features/rooms/components/RoomListSkeleton';
+import { CreateRoomModal } from '@/features/rooms/components/CreateRoomModal';
+import type { RootState } from '@/app/store';
 
 export function Sidebar() {
 	const navigate = useNavigate();
@@ -22,6 +25,7 @@ export function Sidebar() {
 	const { data: roomsData, isLoading: roomsLoading } = useGetRoomsQuery(undefined, {
 		skip: !user, // Only fetch if user is authenticated
 	});
+	const [isCreateRoomOpen, setIsCreateRoomOpen] = useState(false);
 
 	// Use API data if available, otherwise fall back to state
 	const displayRooms = roomsData && roomsData.length > 0 ? roomsData : roomsFromState;
@@ -51,15 +55,15 @@ export function Sidebar() {
 	};
 
 	return (
-		<aside 
-			className="flex w-64 flex-col border-r" 
-			style={{ 
+		<aside
+			className="flex w-64 flex-col border-r"
+			style={{
 				backgroundColor: 'var(--color-bg-secondary)',
 				borderColor: 'var(--color-border)'
 			}}
 		>
 			{/* Server/App Header */}
-			<div 
+			<div
 				className="flex h-14 items-center border-b px-4"
 				style={{ borderColor: 'var(--color-border)' }}
 			>
@@ -73,87 +77,88 @@ export function Sidebar() {
 
 			{/* Navigation */}
 			<nav className="flex-1 overflow-y-auto p-2">
-			{/* Home */}
-			<motion.button
-				onClick={handleHomeClick}
-				whileHover={{ scale: 1.05 }}
-				whileTap={{ scale: 0.95 }}
-				className={cn(
-					'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors',
-					location.pathname === '/' && 'font-medium'
-				)}
-				style={{
-					color: location.pathname === '/' 
-						? 'var(--color-text-primary)' 
-						: 'var(--color-text-secondary)',
-					backgroundColor: location.pathname === '/' 
-						? 'var(--color-bg-tertiary)' 
-						: 'transparent',
-				}}
-				onMouseEnter={(e) => {
-					if (location.pathname !== '/') {
-						e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
-						e.currentTarget.style.color = 'var(--color-text-primary)';
-					}
-				}}
-				onMouseLeave={(e) => {
-					if (location.pathname !== '/') {
-						e.currentTarget.style.backgroundColor = 'transparent';
-						e.currentTarget.style.color = 'var(--color-text-secondary)';
-					}
-				}}
-			>
-				<Home className="h-5 w-5" />
-				<span className="font-medium">Home</span>
-			</motion.button>
+				{/* Home */}
+				<motion.button
+					onClick={handleHomeClick}
+					whileHover={{ scale: 1.05 }}
+					whileTap={{ scale: 0.95 }}
+					className={cn(
+						'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors',
+						location.pathname === '/' && 'font-medium'
+					)}
+					style={{
+						color: location.pathname === '/'
+							? 'var(--color-text-primary)'
+							: 'var(--color-text-secondary)',
+						backgroundColor: location.pathname === '/'
+							? 'var(--color-bg-tertiary)'
+							: 'transparent',
+					}}
+					onMouseEnter={(e) => {
+						if (location.pathname !== '/') {
+							e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+							e.currentTarget.style.color = 'var(--color-text-primary)';
+						}
+					}}
+					onMouseLeave={(e) => {
+						if (location.pathname !== '/') {
+							e.currentTarget.style.backgroundColor = 'transparent';
+							e.currentTarget.style.color = 'var(--color-text-secondary)';
+						}
+					}}
+				>
+					<Home className="h-5 w-5" />
+					<span className="font-medium">Home</span>
+				</motion.button>
 
 				{/* Divider */}
 				<div className="my-2 border-t" style={{ borderColor: 'var(--color-border)' }} />
 
-			{/* Rooms */}
-			<div className="space-y-1">
-				{roomsLoading ? (
-					<div className="px-3 py-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>Loading rooms...</div>
-				) : displayRooms.length === 0 ? (
-					<div className="px-3 py-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>No rooms available</div>
-				) : (
-					displayRooms.map((room) => {
-						const isActive = currentRoomId === room.slug || currentRoomId === room._id;
-						return (
-							<motion.button
-								key={room._id}
-								onClick={() => handleRoomClick(room.slug || room._id)}
-								whileHover={{ scale: 1.02 }}
-								whileTap={{ scale: 0.98 }}
-								className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors"
-								style={{
-									color: isActive ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
-									backgroundColor: isActive ? 'var(--color-bg-tertiary)' : 'transparent',
-									fontWeight: isActive ? '500' : '400',
-								}}
-								onMouseEnter={(e) => {
-									if (!isActive) {
-										e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
-										e.currentTarget.style.color = 'var(--color-text-secondary)';
-									}
-								}}
-								onMouseLeave={(e) => {
-									if (!isActive) {
-										e.currentTarget.style.backgroundColor = 'transparent';
-										e.currentTarget.style.color = 'var(--color-text-tertiary)';
-									}
-								}}
-							>
-								<Hash className="h-5 w-5" />
-								<span className="font-medium">{room.name}</span>
-							</motion.button>
-						);
-					})
-				)}
-			</div>
+				{/* Rooms */}
+				<div className="space-y-1">
+					{roomsLoading ? (
+						<RoomListSkeleton />
+					) : displayRooms.length === 0 ? (
+						<div className="px-3 py-2 text-sm" style={{ color: 'var(--color-text-tertiary)' }}>No rooms available</div>
+					) : (
+						displayRooms.map((room) => {
+							const isActive = currentRoomId === room.slug || currentRoomId === room._id;
+							return (
+								<motion.button
+									key={room._id}
+									onClick={() => handleRoomClick(room.slug || room._id)}
+									whileHover={{ scale: 1.02 }}
+									whileTap={{ scale: 0.98 }}
+									className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors"
+									style={{
+										color: isActive ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
+										backgroundColor: isActive ? 'var(--color-bg-tertiary)' : 'transparent',
+										fontWeight: isActive ? '500' : '400',
+									}}
+									onMouseEnter={(e) => {
+										if (!isActive) {
+											e.currentTarget.style.backgroundColor = 'var(--color-bg-tertiary)';
+											e.currentTarget.style.color = 'var(--color-text-secondary)';
+										}
+									}}
+									onMouseLeave={(e) => {
+										if (!isActive) {
+											e.currentTarget.style.backgroundColor = 'transparent';
+											e.currentTarget.style.color = 'var(--color-text-tertiary)';
+										}
+									}}
+								>
+									<Hash className="h-5 w-5" />
+									<span className="font-medium">{room.name}</span>
+								</motion.button>
+							);
+						})
+					)}
+				</div>
 
 				{/* Add Room Button */}
 				<motion.button
+					onClick={() => setIsCreateRoomOpen(true)}
 					whileHover={{ scale: 1.05 }}
 					whileTap={{ scale: 0.95 }}
 					className="mt-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors"
@@ -197,7 +202,14 @@ export function Sidebar() {
 						</p>
 						<p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>Online</p>
 					</div>
-					<Settings className="h-4 w-4" style={{ color: 'var(--color-text-tertiary)' }} />
+					<Settings
+						className="h-4 w-4 cursor-pointer hover:text-indigo-500 transition-colors"
+						style={{ color: 'var(--color-text-tertiary)' }}
+						onClick={(e) => {
+							e.stopPropagation();
+							navigate('/profile');
+						}}
+					/>
 				</motion.button>
 				<div className="flex items-center justify-between gap-2">
 					<ThemeToggleCompact />
@@ -221,6 +233,7 @@ export function Sidebar() {
 					</motion.button>
 				</div>
 			</div>
+			<CreateRoomModal isOpen={isCreateRoomOpen} onClose={() => setIsCreateRoomOpen(false)} />
 		</aside>
 	);
 }

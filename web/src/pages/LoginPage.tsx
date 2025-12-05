@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { motion } from 'framer-motion';
-import { useLoginMutation } from '../api/authApi';
-import { Button } from '../components/common/Button';
-import { Input } from '../components/common/Input';
-import type { AppDispatch } from '../app/store';
+import { toast } from 'react-hot-toast';
+import { useLoginMutation } from '@/api/authApi';
+import { Button } from '@/components/common/Button';
+import { Input } from '@/components/common/Input';
+import type { AppDispatch } from '@/app/store';
 
 export function LoginPage() {
 	const navigate = useNavigate();
@@ -43,10 +44,16 @@ export function LoginPage() {
 
 		try {
 			await login(formData).unwrap();
+			toast.success('Welcome back!');
 			navigate('/');
 		} catch (err: unknown) {
-			// Error is handled by RTK Query
 			console.error('Login failed:', err);
+			const errorMessage =
+				err && typeof err === 'object' && 'data' in err &&
+					(err.data as { message?: string }).message
+					? (err.data as { message: string }).message
+					: 'Login failed. Please try again.';
+			toast.error(errorMessage);
 		}
 	};
 
@@ -59,7 +66,7 @@ export function LoginPage() {
 	};
 
 	return (
-		<div 
+		<div
 			className="flex min-h-screen items-center justify-center px-4"
 			style={{ backgroundColor: 'var(--color-bg-primary)' }}
 		>
@@ -76,13 +83,6 @@ export function LoginPage() {
 				</div>
 
 				<form onSubmit={handleSubmit} className="space-y-6">
-					{error && 'data' in error && (
-						<div className="rounded-lg bg-red-900/20 border border-red-800 p-3 text-sm text-red-400">
-							{'message' in (error.data as { message?: string })
-								? (error.data as { message: string }).message
-								: 'Login failed. Please try again.'}
-						</div>
-					)}
 
 					<Input
 						label="Email"
